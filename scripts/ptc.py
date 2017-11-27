@@ -27,6 +27,7 @@ class PTC(object):
         fw_cell = tf.nn.rnn_cell.BasicLSTMCell(300)
         bw_cell = tf.nn.rnn_cell.BasicLSTMCell(300)
         (fw_out, bw_out), _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, chars, dtype=tf.float32)
+
         linear_fw = tf.get_variable("linear_fw_weights", shape=[300,300])
         linear_bw = tf.get_variable("linear_bw_weights", shape=[300,300])
         linear_bias = tf.get_variable("linear_bias", [300])
@@ -34,6 +35,7 @@ class PTC(object):
         return linear
 
     def _build_decoder(self, inputs):
+        #
         pass
 
     def _build_model(self):
@@ -42,3 +44,8 @@ class PTC(object):
         #embed each word & put through bi-lstm
         embedding = self._build_embeddings
         encoder = self._build_encoder
+
+        # tanh() will have to get the state from the decoder
+        # linear()
+        # softmax
+        # z = linear*softmax (should have size of 300)
