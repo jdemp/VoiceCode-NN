@@ -28,8 +28,9 @@ class PTC(object):
         bw_cell = tf.nn.rnn_cell.BasicLSTMCell(300)
         (fw_out, bw_out), _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, chars, dtype=tf.float32)
         output = tf.concat([fw_out, bw_out], axis=2)
-        print(output.get_shape())
-        return output
+        W_encoder = tf.get_variable('W_encoder', [600,300])
+        b_encoder = tf.get_variable('b_encoder', [300], initializer=tf.constant_initializer(0.0))
+        return tf.matmul(output, W_encoder) + b_encoder
 
     def _build_decoder(self, inputs):
         #
@@ -41,6 +42,7 @@ class PTC(object):
         #embed each word & put through bi-lstm
         embedding = self._build_embeddings
         encoder = self._build_encoder
+        #attention stuff, concat h with encoder, then tanh, linear, softmax
         return encoder
 
     def get_model(self):
@@ -55,7 +57,3 @@ def main(args):
 
 if __name__ == '__main__':
     tf.app.run()
-        # tanh() will have to get the state from the decoder
-        # linear()
-        # softmax
-        # z = linear*softmax (should have size of 300)
