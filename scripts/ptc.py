@@ -3,8 +3,8 @@ import tensorflow as tf
 class PTC(object):
     def __init__(self, language="Python", use_c2w=True):
         self.language = language
-        self.use_c2w use_c2w
-        self.input = tf.placeholder(tf.string, name="input")
+        self.use_c2w = use_c2w
+        self.input = tf.placeholder(tf.string, [None, None], name="input")
         self.model = self._build_model()
 
     def _build_c2w(self, inputs):
@@ -27,12 +27,9 @@ class PTC(object):
         fw_cell = tf.nn.rnn_cell.BasicLSTMCell(300)
         bw_cell = tf.nn.rnn_cell.BasicLSTMCell(300)
         (fw_out, bw_out), _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, chars, dtype=tf.float32)
-
-        linear_fw = tf.get_variable("linear_fw_weights", shape=[300,300])
-        linear_bw = tf.get_variable("linear_bw_weights", shape=[300,300])
-        linear_bias = tf.get_variable("linear_bias", [300])
-        linear = matmul(fw_out, linear_fw) + matmul(bw_out, linear_bw) + linear_bias
-        return linear
+        output = tf.concat([fw_out, bw_out], axis=2)
+        print(output.get_shape())
+        return output
 
     def _build_decoder(self, inputs):
         #
@@ -44,7 +41,20 @@ class PTC(object):
         #embed each word & put through bi-lstm
         embedding = self._build_embeddings
         encoder = self._build_encoder
+        return encoder
 
+    def get_model(self):
+        return self.model
+
+def main(args):
+
+    model = PTC()
+    sess = tf.Session()
+    init = tf.global_variables_initializer()
+    sess.run(init)
+
+if __name__ == '__main__':
+    tf.app.run()
         # tanh() will have to get the state from the decoder
         # linear()
         # softmax
