@@ -1,5 +1,6 @@
 #import tensorflow as tf
 import re
+import numpy as np
 
 class DataFromFile(object):
     def __init__(self,db_dir="./",language="Python"):
@@ -13,7 +14,7 @@ class DataFromFile(object):
 
     def clean_up_anno(self, line):
         clean = self.regex_split.split(line)
-        return clean
+        return clean[:-1]
 
     def clean_up_code(self, line):
         clean = line.replace(" . ", ".")
@@ -35,6 +36,30 @@ class DataFromFile(object):
     def read_in_combined(self, file):
         pass
 
+    def string_to_bytes(self, word):
+        chars = []
+        for c in word:
+            chars.append(ord(c))
+        return chars
+
+    def format_inputs(self,X):
+        formated_inputs = []
+        for i in X:
+            formated_input = []
+            for word in i:
+                chars = self.string_to_bytes(word)
+                formated_input.append(chars)
+            formated_inputs.append(formated_input)
+        return formated_inputs
+
+    def format_labels(self,labels):
+        formated_labels = []
+        for l in labels:
+            temp = self.string_to_bytes(l)
+            temp.append(3)
+            formated_labels.append(temp)
+        return formated_labels
+            #print(words)
     # bool is if they are combined
     # files is a list of files to create dbs from, don't include extentions
     def create_datasets(self, combined, files, combined_ext="annotation", seperate_code_ext="code", seperate_anno_ext="anno"):
@@ -44,10 +69,18 @@ class DataFromFile(object):
                 x,y = self.read_in_combined(f+"."+combined_ext)
             else:
                 x,y = self.read_in_seperate(f+"."+seperate_code_ext, f+"."+seperate_anno_ext)
-        print(len(x))
-        #print(x[0])
-        print(y[0:10])
 
+        inputs_list = self.format_inputs(x)
+        labels_list = self.format_labels(y)
+
+        #create numpy arrays
+        input_arry =
+
+        #print(len(x))
+        #print(y[0:10])
+        features =
+        labels =
+        dataset = tf.data.Dataset.from_tensor_slices((features, labels))
 
 
 def main():
