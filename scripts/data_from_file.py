@@ -43,22 +43,45 @@ class DataFromFile(object):
         return chars
 
     def format_inputs(self,X):
+        longest_sequence =[]
+        longest_word = []
+        max_sequence = 0
+        max_word = 0
         formated_inputs = []
+        sequence_lengths = []
+        word_lengths = []
         for i in X:
             formated_input = []
+            word_len = []
             for word in i:
                 chars = self.string_to_bytes(word)
                 formated_input.append(chars)
+                _word_length = len(chars)
+                word_len.append(_word_length)
+                if (_word_length>max_word):
+                    max_word = _word_length
+                    longest_word = chars
+
             formated_inputs.append(formated_input)
-        return formated_inputs
+            _sequence_length = len(formated_input)
+            if(max_sequence<_sequence_length):
+                max_sequence=_sequence_length
+                longest_sequence = formated_input
+            sequence_lengths.append(_sequence_length)
+            word_lengths.append(word_len)
+        print(longest_sequence)
+        print(longest_word)
+        return formated_inputs, sequence_lengths, word_lengths, max_sequence, max_word
 
     def format_labels(self,labels):
         formated_labels = []
+        formated_labels_len = []
         for l in labels:
             temp = self.string_to_bytes(l)
             temp.append(3)
             formated_labels.append(temp)
-        return formated_labels
+            formated_labels_len.append(len(temp))
+        return formated_labels, formated_labels_len
             #print(words)
     # bool is if they are combined
     # files is a list of files to create dbs from, don't include extentions
@@ -70,17 +93,41 @@ class DataFromFile(object):
             else:
                 x,y = self.read_in_seperate(f+"."+seperate_code_ext, f+"."+seperate_anno_ext)
 
-        inputs_list = self.format_inputs(x)
-        labels_list = self.format_labels(y)
+            inputs_list, sequence_lengths, word_lengths, max_sequence, max_word = self.format_inputs(x)
+            labels_list, labels_len = self.format_labels(y)
+
+            valid = len(inputs_list)==len(labels_list)==len(labels_len)==len(sequence_lengths)==len(word_lengths)
+            assert(valid)
+
+            #create inputs tensor
+            inputs = np.zeros(shape=(len(inputs_list), max_sequence, max_word), dtype=np.uint8)
+            for i in range(len(inputs_list)):
+                for w in range(len(inputs_list[i])):
+                    #print(inputs_list[i][w])
+                    a = np.array(inputs_list[i][w], dtype=np.uint8)
+                    data[i,w,0:a.shape[0]] = a
+            print(data.shape)
+
+            #create sequence length tensor
+            #create word lengths tensor
+            #create labels tensor
+            #create labels length tensor
+
+
+
+
+
+
+
 
         #create numpy arrays
-        input_arry =
+        #input_arry =
 
         #print(len(x))
         #print(y[0:10])
-        features =
-        labels =
-        dataset = tf.data.Dataset.from_tensor_slices((features, labels))
+        #features =
+        #labels =
+        #dataset = tf.data.Dataset.from_tensor_slices((features, labels))
 
 
 def main():
