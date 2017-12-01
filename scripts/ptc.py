@@ -8,20 +8,39 @@ class C2W(snt.AbstractModule):
         super(C2W, self).__init__(name=name)
         self.size = size
 
+    #takes [words, max_word_length]
     def _build(self, inputs):
-        batch_size = tf.shape(inputs)[0]
-        dtype = tf.float32
+        embed = tf.contrib.layers.embed_sequence(inputs,128,100)
         fw_cell = snt.LSTM(self.size, name="lstm_fw")
         bw_cell = snt.LSTM(self.size, name="lstm_bw")
-        _, (state_fw, state_bw) = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell,
-                                    inputs, dtype=tf.float32)
-#
-        # fw_weights = tf.get_variable("forward_weights", [self.size, self.size])
-        # bw_weights = tf.get_variable("back_weights", [self.size, self.size])
-         #bias = tf.get_variable("c2w_bias", [self.size])
-         #return tf.matmul(state_fw, fw_weights)+tf.matmul(state_bw, bw_weights)+bias
-        print(tf.shape(state_fw))
-        return state_fw + state_bw
+        (a,b), _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell,
+                                    embed, dtype=tf.float32)
+        concat = tf.concat([a[:,-1,:], b[:,-1,:]], 1)
+        final = tf.layers.dense(concat, 300)
+
+        return final
+
+class Encoder(snt.AbstractModule):
+    def __init__(self,units,layers=1,name="encoder"):
+        super(Encoder,self).__init(name=name)
+        self.units=units
+        self.layers=layers
+
+    def _build(self,inputs):
+        fw_cell= tf.rnn.rnn_cell.LSTMCell(self.units)
+        bw_cell= tf.rnn.rnn_cell.LSTMCell(self.units)
+        encoder_outputs, encoder_state = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, inputs)
+        return tf.concat(encoder_outputs, 2)
+
+
+class Attention(snt.Module):
+    def __init__(self,units=256,name="attention"):
+        super(Attention,self).__init(name=name)
+        self.units=units
+
+    def _build(self,inputs):
+
+
 
 
 class PTC(snt.AbstractModule):
@@ -35,16 +54,21 @@ class PTC(snt.AbstractModule):
 
     #inputs are [batch size, max_sequence_length, max_word_length]
     def _build(self, inputs):
-        embeddings = tf.get_variable("character_embeddings", [128, 100])
-        chars = tf.nn.embedding_lookup(embeddings,inputs)
-        #chars are [batch size, max_sequence_length, max_word_length, 100]
+        shape=tf.shape(inputs)
+        batch_size = shape[0]
+        max_sequence_length = shape[1]
+        max_word_length = shape[2]
+        #may switch to snt.batchapply at somepoint
+        c2w_input = tf.reshape(inputs, [batch_size*max_sequence_length,max_word_length])
         c2w = C2W(300)
-        # returns [batch size, max max_sequence_length, 300]
-        c2w_batch = snt.BatchApply(c2w)
-        c2w_words = c2w_batch(chars)
+        words = c2w(c2w_input)
+        sequences = tf.reshape(words, [batch_size, max_sequence_length, 300])
 
 
-        return c2w_words
+        
+
+
+        return sequences
 
         #cell = tf.nn.rnn_cell.LSTMCell(512)
         #attention_mech = tf.contrib.seq2seq.LuongAttention(512, inputs)
@@ -60,10 +84,11 @@ def main(args):
     sess = tf.Session()
     init = tf.global_variables_initializer()
     sess.run(init)
-    test = np.random.randint(0,10,(2,10,20))
-    print(test)
+    test = np.random.randint(0,10,(2,10,25))
+    #print(test)
     output = sess.run([out], feed_dict={p:test})
-    print(tf.shape(output))
+    print(output)
+    #print(tf.shape(output))
 
 
 if __name__ == '__main__':
