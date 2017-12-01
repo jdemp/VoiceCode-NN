@@ -1,59 +1,70 @@
 import tensorflow as tf
+import sonnet as snt
+import numpy as np
 
-class PTC(object):
-    def __init__(self, language="Python", use_c2w=True):
+
+class C2W(snt.AbstractModule):
+    def __init__(self, size, name="c2w"):
+        super(C2W, self).__init__(name=name)
+        self.size = size
+
+    def _build(self, inputs):
+        batch_size = tf.shape(inputs)[0]
+        dtype = tf.float32
+        fw_cell = snt.LSTM(self.size, name="lstm_fw")
+        bw_cell = snt.LSTM(self.size, name="lstm_bw")
+        _, (state_fw, state_bw) = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell,
+                                    inputs, dtype=tf.float32)
+#
+        # fw_weights = tf.get_variable("forward_weights", [self.size, self.size])
+        # bw_weights = tf.get_variable("back_weights", [self.size, self.size])
+         #bias = tf.get_variable("c2w_bias", [self.size])
+         #return tf.matmul(state_fw, fw_weights)+tf.matmul(state_bw, bw_weights)+bias
+        print(tf.shape(state_fw))
+        return state_fw + state_bw
+
+
+class PTC(snt.AbstractModule):
+    def __init__(self, language="Python", use_c2w=True, name="ptc"):
+        super(PTC,self).__init__(name=name)
         self.language = language
-        self.use_c2w = use_c2w
-        self.input = tf.placeholder(tf.string, [None, None], name="input")
-        self.model = self._build_model()
+        self.params = {
+            "c2w_size":300,
+            "encoder_size":300
+        }
 
-    def _build_c2w(self, inputs):
-        byte_input = tf.decode_raw(inputs, tf.unit8, name="convert_input")
-        character_embeddings = tf.get_variable("character_embeddings", [128, 100])
-        chars = tf.nn.embedding_lookup(character_embeddings, inputs)
-        fw_cell = tf.nn.rnn_cell.BasicLSTMCell(300)
-        bw_cell = tf.nn.rnn_cell.BasicLSTMCell(300)
-        _, (state_fw, state_bw) = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, chars)
-        fw_weights = tf.get_variable("forward_weights", [300, 300])
-        bw_weights = tf.get_variable("back_weights", [300, 300])
-        bias = tf.get_variable("c2w_bias", [300])
-        return tf.matmul(state_fw, fw_weights)+tf.matmul(state_bw, bw_weights)+bias
+    #inputs are [batch size, max_sequence_length, max_word_length]
+    def _build(self, inputs):
+        embeddings = tf.get_variable("character_embeddings", [128, 100])
+        chars = tf.nn.embedding_lookup(embeddings,inputs)
+        #chars are [batch size, max_sequence_length, max_word_length, 100]
+        c2w = C2W(300)
+        # returns [batch size, max max_sequence_length, 300]
+        c2w_batch = snt.BatchApply(c2w)
+        c2w_words = c2w_batch(chars)
 
-    def _build_embeddings(self, inputs):
-        if self.use_c2w:
-            return self._build_c2w
 
-    def _build_encoder(self, inputs):
-        fw_cell = tf.nn.rnn_cell.BasicLSTMCell(300)
-        bw_cell = tf.nn.rnn_cell.BasicLSTMCell(300)
-        (fw_out, bw_out), _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, chars, dtype=tf.float32)
-        output = tf.concat([fw_out, bw_out], axis=2)
-        W_encoder = tf.get_variable('W_encoder', [600,300])
-        b_encoder = tf.get_variable('b_encoder', [300], initializer=tf.constant_initializer(0.0))
-        return tf.matmul(output, W_encoder) + b_encoder
+        return c2w_words
 
-    def _build_decoder(self, inputs):
-        #
-        pass
-
-    def _build_model(self):
-        #figure out how to handle variable passthrough
-
-        #embed each word & put through bi-lstm
-        embedding = self._build_embeddings
-        encoder = self._build_encoder
-        #attention stuff, concat h with encoder, then tanh, linear, softmax
-        return encoder
-
-    def get_model(self):
-        return self.model
+        #cell = tf.nn.rnn_cell.LSTMCell(512)
+        #attention_mech = tf.contrib.seq2seq.LuongAttention(512, inputs)
+        #attn_cell = tf.contrib.seq2seq.AttentionWrapper(
+        #    cell, attention_mech, attention_size=256
+        #)
 
 def main(args):
 
     model = PTC()
+    p = tf.placeholder(shape=[None,None,None], dtype=tf.int32)
+    out = model(p)
     sess = tf.Session()
     init = tf.global_variables_initializer()
     sess.run(init)
+    test = np.random.randint(0,10,(2,10,20))
+    print(test)
+    output = sess.run([out], feed_dict={p:test})
+    print(tf.shape(output))
+
 
 if __name__ == '__main__':
     tf.app.run()
