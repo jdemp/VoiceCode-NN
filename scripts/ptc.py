@@ -3,12 +3,23 @@ import sonnet as snt
 import numpy as np
 
 
+# class Embedding(snt.AbstractModule):
+#     def __init__(self,vocab_size=128,embedding_size=100,name="embedding"):
+#         super(Embed,self).__init__(name=name)
+#         self.vocab=vocab_size
+#         self.embedding=embedding_size
+#
+#     def _build(self,inputs):
+#         embed = tf.contrib.layers.embed_sequence(inputs,self.vocab,self.embedding)
+#         return embed
+
+
 class C2W(snt.AbstractModule):
     def __init__(self, size, name="c2w"):
         super(C2W, self).__init__(name=name)
         self.size = size
 
-    #takes [words, max_word_length]
+    #takes [words, max_word_length,embedding size]
     def _build(self, inputs):
         embed = tf.contrib.layers.embed_sequence(inputs,128,100)
         fw_cell = snt.LSTM(self.size, name="lstm_fw")
@@ -30,40 +41,48 @@ class Encoder(snt.AbstractModule):
         fw_cell= tf.nn.rnn_cell.LSTMCell(self.units)
         bw_cell= tf.nn.rnn_cell.LSTMCell(self.units)
         encoder_outputs, encoder_state = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, inputs, dtype=tf.float32)
-        return tf.concat(encoder_outputs, 2)
+        return tf.concat(encoder_outputs, 2), encoder_state
 
 
-class Attention(snt.AbstractModule):
-    def __init__(self,units=512,attn_size=256,name="attention"):
-        super(Attention,self).__init__(name=name)
+class AttentionDecoder(snt.AbstractModule):
+    def __init__(self,units=512,attn_size=256,mode="train",name="attention"):
+        super(AttentionDecoder,self).__init__(name=name)
         self.units=units
         self.attention_size=attn_size
+        self.mode=mode
 
-    def _build(self,inputs):
+    def _build(self,inputs,sequences=None, sequence_lengths=None):
+        batch_size = tf.shape(inputs)[0]
+
         cell = tf.nn.rnn_cell.LSTMCell(self.units)
-        attention_mech=tf.contrib.seq2seq.LuongAttention(self.units, inputs)
+        attention_mech=tf.contrib.seq2seq.LuongAttention(self.units, inputs, memory_sequence_length=sequence_lengths)
         attn_cell = tf.contrib.seq2seq.AttentionWrapper(
-            cell, attention_mech,attention_size=self.attention_size
+            cell, attention_mech, attention_layer_size=self.units/2
         )
 
-        return attn_cell
+        embeddings = tf.get_variable("embeddings",[128,100], dtype=tf.float32)
+        if self.mode == "train":
+            helper = tf.contrib.seq2seq.TrainingHelper(
+            inputs=embeddings,
+            sequence_length=sequences)
+        # elif mode == "infer":
+        #     helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
+        #     embedding=embedding,
+        #     start_tokens=tf.tile([GO_SYMBOL], [batch_size]),
+        #     end_token=END_SYMBOL)
 
-
-# class Decoder(snt.AbstractModule):
-#     def __init__(self,name="decoder"):
-#         super(Decoder,self).__init(name=name)
-#
-#     def _build(self,inputs):
-#         if mode == "train":
-#             helper = tf.contrib.seq2seq.TrainingHelper(
-#             input=input_vectors,
-#             sequence_length=input_lengths)
-#         elif mode == "infer":
-#             helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
-#             embedding=embedding,
-#             start_tokens=tf.tile([GO_SYMBOL], [batch_size]),
-#             end_token=END_SYMBOL)
-
+        decoder = tf.contrib.seq2seq.BasicDecoder(
+            cell=attn_cell,
+            helper = helper,
+            initial_state=attn_cell.zero_state(batch_size, tf.float32)
+        )
+        outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(
+            decoder=decoder,
+            output_time_major=False,
+            impute_finished=True,
+            maximum_iterations=20
+        )
+        return outputs
 
 
 class PTC(snt.AbstractModule):
@@ -72,7 +91,7 @@ class PTC(snt.AbstractModule):
         self.language = language
 
     #inputs are [batch size, max_sequence_length, max_word_length]
-    def _build(self, inputs):
+    def _build(self, inputs,labels,lengths):
         shape=tf.shape(inputs)
         batch_size = shape[0]
         max_sequence_length = shape[1]
@@ -85,30 +104,30 @@ class PTC(snt.AbstractModule):
 
         #encoder
         encoder = Encoder(256)
-        encoder_out = encoder(sequences)
+        encoder_out, (fw_state,bw_state) = encoder(sequences)
 
         #attention
+        attention = AttentionDecoder()
+        state = attention(encoder_out,labels,lengths)
 
+        return tf.shape(state)
 
-        return tf.shape(encoder_out)
-
-        #cell = tf.nn.rnn_cell.LSTMCell(512)
-        #attention_mech = tf.contrib.seq2seq.LuongAttention(512, inputs)
-        #attn_cell = tf.contrib.seq2seq.AttentionWrapper(
-        #    cell, attention_mech, attention_size=256
-        #)
 
 def main(args):
 
     model = PTC()
     p = tf.placeholder(shape=[None,None,None], dtype=tf.int32)
-    out = model(p)
+    l = tf.placeholder(shape=[None],dtype=tf.int32)
+    p_l = tf.placeholder(shape=[None],dtype=tf.int32)
+    input_lenghts = np.array([10,10,10])
+    out = model(p,l,p_l)
     sess = tf.Session()
     init = tf.global_variables_initializer()
     sess.run(init)
-    test = np.random.randint(0,10,(2,10,25))
+    test = np.random.randint(0,10,(3,10,25))
+    test_lengths = np.random.randint(0,100,(3))
     #print(test)
-    output = sess.run([out], feed_dict={p:test})
+    output = sess.run([out], feed_dict={p:test,l:test_lengths,p_l:input_lengths})
     print(output)
     #print(tf.shape(output))
 
