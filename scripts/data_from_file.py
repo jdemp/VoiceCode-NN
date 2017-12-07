@@ -1,4 +1,4 @@
-#import tensorflow as tf
+import tensorflow as tf
 import re
 import numpy as np
 
@@ -69,8 +69,8 @@ class DataFromFile(object):
                 longest_sequence = formated_input
             sequence_lengths.append(_sequence_length)
             word_lengths.append(word_len)
-        print(longest_sequence)
-        print(longest_word)
+        #print(longest_sequence)
+        #print(longest_word)
         return formated_inputs, sequence_lengths, word_lengths, max_sequence, max_word
 
     def format_labels(self,labels):
@@ -100,22 +100,32 @@ class DataFromFile(object):
             assert(valid)
 
             #create inputs tensor
-            inputs = np.zeros(shape=(len(inputs_list), max_sequence, max_word), dtype=np.uint8)
+            inputs_tensor = np.zeros(shape=(len(inputs_list), max_sequence, max_word), dtype=np.int32)
             for i in range(len(inputs_list)):
                 for w in range(len(inputs_list[i])):
                     #print(inputs_list[i][w])
-                    a = np.array(inputs_list[i][w], dtype=np.uint8)
-                    data[i,w,0:a.shape[0]] = a
-            print(data.shape)
+                    a = np.array(inputs_list[i][w], dtype=np.int32)
+                    inputs_tensor[i,w,0:a.shape[0]] = a
+            print(inputs_tensor)
 
-            #create sequence length tensor
+            input_length_tensor = np.array(sequence_lengths, dtype=np.int32).reshape((len(sequence_lengths),1))
+            print(input_length_tensor.shape)
             #create word lengths tensor
             #create labels tensor
+            max_label_len = max(labels_len)
+            labels_tensor = np.zeros(shape=(len(labels_list), max_label_len), dtype=np.int32)
+            for i in range(len(labels_list)):
+                a = np.array(labels_list[i], dtype=np.int32)
+                labels_tensor[i,0:a.shape[0]] = a
+
+            labels_length_tensor = np.array(labels_len, dtype=np.int32).reshape((len(labels_len),1))
+
             #create labels length tensor
+            datasets[f] = tf.data.Dataset.from_tensor_slices((inputs_tensor, input_length_tensor, labels_tensor, labels_length_tensor))
 
 
 
-
+        return datasets
 
 
 
@@ -133,7 +143,9 @@ class DataFromFile(object):
 def main():
     dff = DataFromFile(db_dir="../datasets/en-django/")
     files = ["all"]
-    dff.create_datasets(False, files)
+    d = dff.create_datasets(False, files)
+
+    print(d["all"].output_types)
 
 if __name__ == '__main__':
     main()

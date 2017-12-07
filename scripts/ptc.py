@@ -49,7 +49,7 @@ class Decoder(snt.AbstractModule):
         self.attention_size=attn_size
         self.mode=mode
 
-    def _build(self,inputs,input_lengths,labels=None,labels_lengths=None):
+    def _build(self,inputs,input_lengths,labels=None, labels_lengths=None):
         batch_size = tf.shape(inputs)[0]
 
         cell = tf.nn.rnn_cell.BasicLSTMCell(self.units)
@@ -69,17 +69,19 @@ class Decoder(snt.AbstractModule):
         #     embedding=embedding,
         #     start_tokens=tf.tile([GO_SYMBOL], [batch_size]),
         #     end_token=END_SYMBOL)
+        projection_layer = tf.layers.Dense(128, use_bias=False)
         initial_state=attn_cell.zero_state(batch_size, tf.float32)
         decoder = tf.contrib.seq2seq.BasicDecoder(
             cell=attn_cell,
             helper = helper,
-            initial_state=initial_state
+            initial_state=initial_state,
+            output_layer=projection_layer
         )
         final_outputs, final_state, final_sequence_lengths = tf.contrib.seq2seq.dynamic_decode(
             decoder=decoder,
             output_time_major=False,
             impute_finished=True,
-            maximum_iterations=20
+            maximum_iterations=100
         )
         return final_outputs, final_state, final_sequence_lengths
 
@@ -90,7 +92,7 @@ class PTC(snt.AbstractModule):
         self.language = language
 
     #inputs are [batch size, max_sequence_length, max_word_length]
-    def _build(self, inputs,input_lengths,labels,labels_lengths):
+    def _build(self, inputs,input_lengths,labels=None, labels_lengths=None):
         shape=tf.shape(inputs)
         batch_size = shape[0]
         max_sequence_length = shape[1]
@@ -107,9 +109,11 @@ class PTC(snt.AbstractModule):
 
         #attention
         attention = Decoder()
-        decoder_output, decoder_state, final_sequences = attention(encoder_out,input_lengths,labels, labels_lengths)
+        decoder_output, decoder_state, final_sequences_length = attention(encoder_out,input_lengths, labels, labels_lengths)
 
-        return tf.shape(decoder_output.rnn_output)
+        logits = decoder_output.rnn_output
+        code = decoder_output.sample_id
+        return logits, code
 
 
 def main(args):
