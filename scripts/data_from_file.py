@@ -5,6 +5,7 @@ import numpy as np
 class DataFromFile(object):
     def __init__(self,db_dir="./",language="Python"):
         self.db_dir = db_dir
+        self.datasets ={}
         if language=="Python":
             #self.regex = re.compile(r'\-+|\ +|\_+ ')
             self.regex_split = re.compile(r'[\-|\ |\_ |\.]+')
@@ -12,13 +13,57 @@ class DataFromFile(object):
         else:
             self.regex_split = re.compile(r'\ ')
 
+    def next_batch(self,ds="all", size=32):
+        end_of_epoch = False
+        data = self.datasets[ds]
+        start_index = data["batch_index"]
+        end_index = start_index+size
+        if(end_index<data["size"]):
+            batch = data["batch_perm"][start_index:end_index]
+            data["batch_index"] = end_index
+        else:
+            batch = data["batch_perm"][start_index:]
+            data["batch_index"] = 0
+            data["batch_perm"]=np.random.permutation(data["size"])
+            end_of_epoch = True
+
+        inputs = np.take(data["inputs"], batch, 0)
+        inputs_len = np.take(data["inputs_len"], batch, 0)
+        labels = np.take(data["labels"], batch, 0)
+        labels_len = np.take(data["labels_len"], batch, 0)
+
+        max_length = np.max(labels_len)
+        return (inputs,inputs_len,labels[:,0:max_length],labels_len),  end_of_epoch
+
+    def test_set(self, batch_size=32, ds="all"):
+        data = self.datasets[ds]
+        test_all = data["test_set"][0:50*batch_size]
+        test_set = []
+        for i in range(0,50*batch_size,batch_size):
+            test = test_all[i:i+batch_size]
+            inputs = np.take(data["inputs"], test, 0)
+            inputs_len = np.take(data["inputs_len"], test, 0)
+            labels = np.take(data["labels"], test, 0)
+            labels_len = np.take(data["labels_len"], test, 0)
+            max_length = np.max(labels_len)
+            test_set.append((inputs,inputs_len,labels[:,0:max_length],labels_len))
+        return test_set
+
+
     def clean_up_anno(self, line):
         clean = self.regex_split.split(line)
-        return clean[:-1]
+        chars = []
+        max_word_length =0
+        for word in clean:
+            c = self.string_to_bytes(word)
+            chars.append(c)
+            if len(c)>max_word_length:
+                max_word_length=len(c)
+        return chars, len(clean), max_word_length
 
     def clean_up_code(self, line):
         clean = line.replace(" . ", ".")
-        return clean
+        return clean.strip()
 
     def read_in_seperate(self, code, anno):
         code_file = open(self.db_dir+code)
@@ -26,11 +71,10 @@ class DataFromFile(object):
         X = []
         Y = []
         for x_raw,y_raw in zip(anno_file, code_file):
-
-            x = self.clean_up_anno(x_raw.strip())
-            y = self.clean_up_code(y_raw.strip())
-            X.append(x)
-            Y.append(y)
+            if (len(y_raw.strip()))<126:
+                X.append(x_raw.strip())
+                Y.append(y_raw.strip())
+                #print(y_raw.strip())
         return X,Y
 
     def read_in_combined(self, file):
@@ -43,41 +87,58 @@ class DataFromFile(object):
         return chars
 
     def format_inputs(self,X):
-        longest_sequence =[]
-        longest_word = []
-        max_sequence = 0
-        max_word = 0
+        longest_sequence = 0;
+        longest_word =0;
         formated_inputs = []
-        sequence_lengths = []
-        word_lengths = []
-        for i in X:
-            formated_input = []
-            word_len = []
-            for word in i:
-                chars = self.string_to_bytes(word)
-                formated_input.append(chars)
-                _word_length = len(chars)
-                word_len.append(_word_length)
-                if (_word_length>max_word):
-                    max_word = _word_length
-                    longest_word = chars
+        input_lengths = []
 
-            formated_inputs.append(formated_input)
-            _sequence_length = len(formated_input)
-            if(max_sequence<_sequence_length):
-                max_sequence=_sequence_length
-                longest_sequence = formated_input
-            sequence_lengths.append(_sequence_length)
-            word_lengths.append(word_len)
-        #print(longest_sequence)
-        #print(longest_word)
-        return formated_inputs, sequence_lengths, word_lengths, max_sequence, max_word
+        for line in X:
+            chars, length, word_length = self.clean_up_anno(line)
+            formated_inputs.append(chars)
+            input_lengths.append(length)
+            if word_length>longest_word:
+                longest_word=word_length
+            if length>longest_sequence:
+                longest_sequence=length
+
+        return formated_inputs, input_lengths, longest_sequence, longest_word
+    # def format_inputs(self,X):
+    #     longest_sequence =[]
+    #     longest_word = []
+    #     max_sequence = 0
+    #     max_word = 0
+    #     formated_inputs = []
+    #     sequence_lengths = []
+    #     word_lengths = []
+    #     for i in X:
+    #         formated_input = []
+    #         word_len = []
+    #         for word in i:
+    #             chars = self.string_to_bytes(word)
+    #             formated_input.append(chars)
+    #             _word_length = len(chars)
+    #             word_len.append(_word_length)
+    #             if (_word_length>max_word):
+    #                 max_word = _word_length
+    #                 longest_word = chars
+    #
+    #         formated_inputs.append(formated_input)
+    #         _sequence_length = len(formated_input)
+    #         if(max_sequence<_sequence_length):
+    #             max_sequence=_sequence_length
+    #             longest_sequence = formated_input
+    #         sequence_lengths.append(_sequence_length)
+    #         word_lengths.append(word_len)
+    #     #print(longest_sequence)
+    #     #print(longest_word)
+    #     return formated_inputs, sequence_lengths, word_lengths, max_sequence, max_word
 
     def format_labels(self,labels):
         formated_labels = []
         formated_labels_len = []
         for l in labels:
-            temp = self.string_to_bytes(l)
+            clean = self.clean_up_code(l)
+            temp = [2] + self.string_to_bytes(clean)
             temp.append(3)
             formated_labels.append(temp)
             formated_labels_len.append(len(temp))
@@ -86,18 +147,19 @@ class DataFromFile(object):
     # bool is if they are combined
     # files is a list of files to create dbs from, don't include extentions
     def create_datasets(self, combined, files, combined_ext="annotation", seperate_code_ext="code", seperate_anno_ext="anno"):
-        datasets = {}
         for f in files:
             if combined:
                 x,y = self.read_in_combined(f+"."+combined_ext)
             else:
                 x,y = self.read_in_seperate(f+"."+seperate_code_ext, f+"."+seperate_anno_ext)
 
-            inputs_list, sequence_lengths, word_lengths, max_sequence, max_word = self.format_inputs(x)
+            inputs_list, sequence_lengths, max_sequence, max_word = self.format_inputs(x)
             labels_list, labels_len = self.format_labels(y)
 
-            valid = len(inputs_list)==len(labels_list)==len(labels_len)==len(sequence_lengths)==len(word_lengths)
+            valid = len(inputs_list)==len(labels_list)==len(labels_len)==len(sequence_lengths)
             assert(valid)
+
+            #print(sequence_lengths.count(0))
 
             #create inputs tensor
             inputs_tensor = np.zeros(shape=(len(inputs_list), max_sequence, max_word), dtype=np.int32)
@@ -106,10 +168,10 @@ class DataFromFile(object):
                     #print(inputs_list[i][w])
                     a = np.array(inputs_list[i][w], dtype=np.int32)
                     inputs_tensor[i,w,0:a.shape[0]] = a
-            print(inputs_tensor)
+            #print(inputs_tensor)
 
-            input_length_tensor = np.array(sequence_lengths, dtype=np.int32).reshape((len(sequence_lengths),1))
-            print(input_length_tensor.shape)
+            input_length_tensor = np.array(sequence_lengths, dtype=np.int32).flatten()
+            #print(input_length_tensor.shape)
             #create word lengths tensor
             #create labels tensor
             max_label_len = max(labels_len)
@@ -118,34 +180,30 @@ class DataFromFile(object):
                 a = np.array(labels_list[i], dtype=np.int32)
                 labels_tensor[i,0:a.shape[0]] = a
 
-            labels_length_tensor = np.array(labels_len, dtype=np.int32).reshape((len(labels_len),1))
+            labels_length_tensor = np.array(labels_len, dtype=np.int32).flatten()
+            #print(labels_tensor.shape)
+            self.datasets[f]={
+                "inputs": inputs_tensor,
+                "inputs_len": input_length_tensor,
+                "labels": labels_tensor,
+                "labels_len": labels_length_tensor,
+                "size":len(inputs_list),
+                "batch_index": 0,
+                "batch_perm": np.random.permutation(len(inputs_list)),
+                "test_set": np.random.permutation(len(inputs_list))
+            }
+            print(self.datasets[f]["size"])
 
-            #create labels length tensor
-            datasets[f] = tf.data.Dataset.from_tensor_slices((inputs_tensor, input_length_tensor, labels_tensor, labels_length_tensor))
 
-
-
-        return datasets
-
-
-
-
-        #create numpy arrays
-        #input_arry =
-
-        #print(len(x))
-        #print(y[0:10])
-        #features =
-        #labels =
-        #dataset = tf.data.Dataset.from_tensor_slices((features, labels))
 
 
 def main():
     dff = DataFromFile(db_dir="../datasets/en-django/")
     files = ["all"]
-    d = dff.create_datasets(False, files)
+    dff.create_datasets(False, files)
+    b,i = dff.next_batch(size=8)
+    print(b[2].shape)
 
-    print(d["all"].output_types)
 
 if __name__ == '__main__':
     main()

@@ -16,30 +16,56 @@ class VoiceCode(object):
         self.model = PTC()
 
     def train(self):
-        batch_size = 64
-        dff = DataFromFile(db_dir="../datasets/en-django/")
-        files = ["all"]
-        d=dff.create_datasets(False, files)
-        dataset = d["all"]
 
+        config = tf.ConfigProto(allow_soft_placement=True)
+        config.gpu_options.allocator_type = 'BFC'
+        #config.gpu_options.per_process_gpu_memory_fraction = 0.40
+        config.gpu_options.allow_growth = True
+        batch_size = 16
+        data = DataFromFile(db_dir="../datasets/en-django/")
+        files = ["all"]
+        data.create_datasets(False, files)
+        one_hot = tf.one_hot(self.labels,depth=128,axis=-1)
         logits, sequence = self.model(self.input, self.input_length,self.labels, self.labels_length)
-        crossent = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=self.labels, logits=logits
+        crossent = tf.nn.softmax_cross_entropy_with_logits(
+            labels=one_hot, logits=logits
         )
-        train_loss = (tf.reduce_sum(crossent))/batch_size
+        train_loss = (tf.reduce_sum(crossent))
 
         optimizer = tf.train.AdamOptimizer(.1)
         train_step = optimizer.minimize(train_loss)
 
         sess = tf.Session()
         sess.run(tf.global_variables_initializer())
+        saver = tf.train.Saver(max_to_keep=10,keep_checkpoint_every_n_hours=2)
 
-        #dataset = dataset.batch(batch_size)
-        #iterator = dataset.make_initializable_iterator()
-        #next_batch = iterator.get_next()
+        for e in range(100):
+            end_of_epoch = False
+            while not end_of_epoch:
+                batch, end_of_epoch = data.next_batch(size=batch_size)
+                feed_dict = {
+                    self.input:batch[0],
+                    self.input_length:batch[1],
+                    self.labels:batch[2],
+                    self.labels_length:batch[3]
+                }
+                t, loss = sess.run([train_step,train_loss],feed_dict=feed_dict)
+            test_set= data.test_set(batch_size=batch_size)
+            for i in range(len(test_set)):
+                batch = test_set[i]
+                feed_dict = {
+                    self.input:batch[0],
+                    self.input_length:batch[1],
+                    self.labels:batch[2],
+                    self.labels_length:batch[3]
+                }
+                l=sess.run(train_loss,feed_dict=feed_dict)
+                loss+=l
+            print("Epoch number "+str(e))
+            print(loss)
+            saver.save(sess, "../models/tmp/base_model",global_step=e)
 
-        #batch = sess.run(next_batch)
-        #print(batch)
+
 
     def infer():
         pass

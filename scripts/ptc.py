@@ -16,7 +16,7 @@ class C2W(snt.AbstractModule):
         (a,b), _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell,
                                     embed, dtype=tf.float32)
         concat = tf.concat([a[:,-1,:], b[:,-1,:]], 1)
-        final = tf.layers.dense(concat, 256)
+        final = tf.layers.dense(concat, self.size)
 
         return final
 
@@ -43,7 +43,7 @@ class Attention(snt.AbstractModule):
 
 
 class Decoder(snt.AbstractModule):
-    def __init__(self,units=512,attn_size=256,mode="train",name="decoder"):
+    def __init__(self,units=128,attn_size=256,mode="train",name="decoder"):
         super(Decoder,self).__init__(name=name)
         self.units=units
         self.attention_size=attn_size
@@ -81,7 +81,7 @@ class Decoder(snt.AbstractModule):
             decoder=decoder,
             output_time_major=False,
             impute_finished=True,
-            maximum_iterations=100
+            maximum_iterations=128
         )
         return final_outputs, final_state, final_sequence_lengths
 
@@ -99,12 +99,12 @@ class PTC(snt.AbstractModule):
         max_word_length = shape[2]
         #may switch to snt.batchapply at somepoint
         c2w_input = tf.reshape(inputs, [batch_size*max_sequence_length,max_word_length])
-        c2w = C2W(256)
+        c2w = C2W(128)
         words = c2w(c2w_input)
-        sequences = tf.reshape(words, [batch_size, max_sequence_length, 256])
+        sequences = tf.reshape(words, [batch_size, max_sequence_length, 128])
 
         #encoder
-        encoder = Encoder(256)
+        encoder = Encoder(128)
         encoder_out, (fw_state,bw_state) = encoder(sequences)
 
         #attention
@@ -113,7 +113,7 @@ class PTC(snt.AbstractModule):
 
         logits = decoder_output.rnn_output
         code = decoder_output.sample_id
-        return logits, code
+        return decoder_output
 
 
 def main(args):
@@ -124,15 +124,20 @@ def main(args):
     labels_len = tf.placeholder(shape=[None],dtype=tf.int32)
     p_l = tf.placeholder(shape=[None],dtype=tf.int32)
     input_lengths = np.array([10,10,10])
-    out = model(p,p_l,labels,labels_len)
+    logits, code = model(p,p_l,labels,labels_len)
+    crossent = tf.nn.sparse_softmax_cross_entropy_with_logits(
+        labels=labels, logits=logits
+    )
+    train_loss = (tf.reduce_sum(crossent))
     sess = tf.Session()
     init = tf.global_variables_initializer()
     sess.run(init)
     test = np.random.randint(0,10,(3,10,25))
-    test_lengths = np.array([15,15,15])
-    test_labels = np.random.randint(0,50,(3,15))
+    test_lengths = np.array([15,15,17])
+    test_labels = np.random.randint(0,50,(3,17))
     #print(test)
-    output = sess.run([out], feed_dict={p:test,labels:test_labels,p_l:input_lengths,labels_len:test_lengths})
+    output = sess.run([logits], feed_dict={p:test,labels:test_labels,p_l:input_lengths,labels_len:test_lengths})
+    print(tf.shape(output))
     print(output)
     #print(tf.shape(output))
 
