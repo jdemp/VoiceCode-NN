@@ -15,13 +15,11 @@ class VoiceCode(object):
 
         self.model = PTC()
 
+
+
     def train(self):
 
-        config = tf.ConfigProto(allow_soft_placement=True)
-        config.gpu_options.allocator_type = 'BFC'
-        #config.gpu_options.per_process_gpu_memory_fraction = 0.40
-        config.gpu_options.allow_growth = True
-        batch_size = 16
+        batch_size = 64
         data = DataFromFile(db_dir="../datasets/en-django/")
         files = ["all"]
         data.create_datasets(False, files)
@@ -30,9 +28,9 @@ class VoiceCode(object):
         crossent = tf.nn.softmax_cross_entropy_with_logits(
             labels=one_hot, logits=logits
         )
-        train_loss = (tf.reduce_sum(crossent))
+        train_loss = (tf.reduce_sum(crossent))/batch_size
 
-        optimizer = tf.train.AdamOptimizer(.1)
+        optimizer = tf.train.AdadeltaOptimizer(.5)
         train_step = optimizer.minimize(train_loss)
 
         sess = tf.Session()
@@ -41,6 +39,7 @@ class VoiceCode(object):
 
         for e in range(100):
             end_of_epoch = False
+            b = 0
             while not end_of_epoch:
                 batch, end_of_epoch = data.next_batch(size=batch_size)
                 feed_dict = {
@@ -50,6 +49,9 @@ class VoiceCode(object):
                     self.labels_length:batch[3]
                 }
                 t, loss = sess.run([train_step,train_loss],feed_dict=feed_dict)
+                b+=1
+                if b%10==0:
+                    print(b)
             test_set= data.test_set(batch_size=batch_size)
             for i in range(len(test_set)):
                 batch = test_set[i]

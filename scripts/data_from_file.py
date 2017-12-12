@@ -102,36 +102,6 @@ class DataFromFile(object):
                 longest_sequence=length
 
         return formated_inputs, input_lengths, longest_sequence, longest_word
-    # def format_inputs(self,X):
-    #     longest_sequence =[]
-    #     longest_word = []
-    #     max_sequence = 0
-    #     max_word = 0
-    #     formated_inputs = []
-    #     sequence_lengths = []
-    #     word_lengths = []
-    #     for i in X:
-    #         formated_input = []
-    #         word_len = []
-    #         for word in i:
-    #             chars = self.string_to_bytes(word)
-    #             formated_input.append(chars)
-    #             _word_length = len(chars)
-    #             word_len.append(_word_length)
-    #             if (_word_length>max_word):
-    #                 max_word = _word_length
-    #                 longest_word = chars
-    #
-    #         formated_inputs.append(formated_input)
-    #         _sequence_length = len(formated_input)
-    #         if(max_sequence<_sequence_length):
-    #             max_sequence=_sequence_length
-    #             longest_sequence = formated_input
-    #         sequence_lengths.append(_sequence_length)
-    #         word_lengths.append(word_len)
-    #     #print(longest_sequence)
-    #     #print(longest_word)
-    #     return formated_inputs, sequence_lengths, word_lengths, max_sequence, max_word
 
     def format_labels(self,labels):
         formated_labels = []

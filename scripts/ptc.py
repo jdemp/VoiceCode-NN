@@ -10,7 +10,7 @@ class C2W(snt.AbstractModule):
 
     #takes [words, max_word_length,embedding size]
     def _build(self, inputs):
-        embed = tf.contrib.layers.embed_sequence(inputs,128,100)
+        embed = tf.contrib.layers.embed_sequence(inputs,128,32)
         fw_cell = snt.LSTM(self.size, name="lstm_fw")
         bw_cell = snt.LSTM(self.size, name="lstm_bw")
         (a,b), _ = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell,
@@ -19,6 +19,17 @@ class C2W(snt.AbstractModule):
         final = tf.layers.dense(concat, self.size)
 
         return final
+
+class Embedding(snt.AbstractModule):
+    def __init__(self,vocab,embed,name="embedding"):
+        super(Embedding, self).__init__(name=name)
+        self.vocab=vocab
+        self.embed=embed
+
+    def _build(self, inputs):
+        embeddings = tf.get_variable("embeddings",[self.vocab, self.embed])
+        lookup = tf.nn.embedding_lookup(embeddings,inputs)
+        return lookup
 
 class Encoder(snt.AbstractModule):
     def __init__(self,units,layers=1,name="encoder"):
@@ -43,22 +54,21 @@ class Attention(snt.AbstractModule):
 
 
 class Decoder(snt.AbstractModule):
-    def __init__(self,units=128,attn_size=256,mode="train",name="decoder"):
+    def __init__(self,units=128,mode="train",name="decoder"):
         super(Decoder,self).__init__(name=name)
         self.units=units
-        self.attention_size=attn_size
         self.mode=mode
 
     def _build(self,inputs,input_lengths,labels=None, labels_lengths=None):
         batch_size = tf.shape(inputs)[0]
 
         cell = tf.nn.rnn_cell.BasicLSTMCell(self.units)
-        attention_mech=tf.contrib.seq2seq.BahdanauAttention(self.units, inputs, memory_sequence_length=input_lengths)
+        attention_mech=tf.contrib.seq2seq.LuongAttention(self.units, inputs, memory_sequence_length=input_lengths)
         attn_cell = tf.contrib.seq2seq.AttentionWrapper(
-            cell, attention_mech, attention_layer_size=self.units/2
+            cell, attention_mech, attention_layer_size=None
         )
 
-        embeddings = tf.get_variable("embeddings",[128,100])
+        embeddings = tf.get_variable("embeddings",[128,32])
         decoder_emb_inp = tf.nn.embedding_lookup(embeddings, labels)
         if self.mode == "train":
             helper = tf.contrib.seq2seq.TrainingHelper(
@@ -99,9 +109,9 @@ class PTC(snt.AbstractModule):
         max_word_length = shape[2]
         #may switch to snt.batchapply at somepoint
         c2w_input = tf.reshape(inputs, [batch_size*max_sequence_length,max_word_length])
-        c2w = C2W(128)
+        c2w = C2W(64)
         words = c2w(c2w_input)
-        sequences = tf.reshape(words, [batch_size, max_sequence_length, 128])
+        sequences = tf.reshape(words, [batch_size, max_sequence_length, 64])
 
         #encoder
         encoder = Encoder(128)
