@@ -38,14 +38,20 @@ class FeedForward(snt.AbstractModule):
         self.dim = dim
 
     def _build(self, inputs):
-        ff = tf.layers.dense(inputs, self.dim)
-        norm = LayerNorm()(inputs,ff)
+        ff1 = tf.layers.dense(inputs, self.dim*4)
+        ff2 = tf.layers.dense(ff1, self.dim)
+        norm = LayerNorm()(inputs,ff2)
         return norm
 
 
 class PositionalEncoding(snt.AbstractModule):
     def __init__(self,name="positional_encoding"):
         super(PositionalEncoding, self).__init__(name=name)
+
+
+class Embedding(snt.AbstractModule):
+    def __init__(self,name="embedding"):
+        super(Embedding, self).__init__(name=name)        
 
 
 class Encoder(snt.AbstractModule):
@@ -59,13 +65,36 @@ class Encoder(snt.AbstractModule):
         return output
 
 class EncoderStack(snt.AbstractModule):
-    def __init__(self,name="encoder_stack"):
+    def __init__(self,layers=2, name="encoder_stack"):
         super(EncoderStack, self).__init__(name=name)
+        self.layers = layers
+
+    def _build(self, inputs):
+        x = inputs
+        for layer in range(self.layers):
+            x = Encoder()(x)
+        return x
 
 class Decoder(snt.AbstractModule):
-    def __init__(self,name="decoder"):
+    def __init__(self,depth=256,name="decoder"):
         super(Decoder, self).__init__(name=name)
+        self.depth = depth
+
+    def _build(self, inputs, encoder_output):
+        masked_attention = ScaledDotProductAttention()(inputs,self.depth,
+                                                            self.depth)
+        attention = ScaledDotProductAttention()(masked_attention,self.depth,
+                                                    self.depth, encoder_output)
+        ff = FeedForward()(attention)
+        return ff
 
 class DecoderStack(snt.AbstractModule):
-    def __init__(self,name="decoder_stack"):
+    def __init__(self,layers=2, name="decoder_stack"):
         super(DecoderStack, self).__init__(name=name)
+        self.layers = layers
+
+    def _build(self, outputs_shifted, encoder_outputs):
+        x = outputs_shifted
+        for layer in range(self.layers):
+            x = Decoder()(outputs_shifted, encoder_outputs)
+        return x
