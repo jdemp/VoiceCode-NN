@@ -17,7 +17,7 @@ class ScaledDotProductAttention(snt.AbstractModule):
         super(ScaledDotProductAttention, self).__init__(name=name)
 
     def _build(self, query, key_depth, value_depth, memory=None):
-        if memory=None:
+        if memory==None:
             memory=query
         q = tf.layers.dense(query, key_depth, use_bias=False)
         k = tf.layers.dense(memory, key_depth, use_bias=False)
@@ -33,7 +33,7 @@ class ScaledDotProductAttention(snt.AbstractModule):
 
 
 class FeedForward(snt.AbstractModule):
-    def __init__(self,dim=256,name="feed_forward"):
+    def __init__(self,dim,name="feed_forward"):
         super(FeedForward, self).__init__(name=name)
         self.dim = dim
 
@@ -55,11 +55,11 @@ class PositionalEncoding(snt.AbstractModule):
 
 
     def _build(self, inputs):
-
+        pass
 
 
 class Embedding(snt.AbstractModule):
-    def __init__(self,vocab,dim=256,name="embedding"):
+    def __init__(self,vocab,dim,name="embedding"):
         super(Embedding, self).__init__(name=name)
         self.vocab = vocab
         self.dim = dim
@@ -70,17 +70,17 @@ class Embedding(snt.AbstractModule):
         return lookup
 
 class Encoder(snt.AbstractModule):
-    def __init__(self,depth=256,name="encoder"):
+    def __init__(self,depth,name="encoder"):
         super(Encoder, self).__init__(name=name)
         self.depth = depth
 
     def _build(self, inputs):
         atten = ScaledDotProductAttention()(inputs,self.depth, self.depth)
-        ff = FeedForward()(atten)
-        return output
+        ff = FeedForward(self.depth)(atten)
+        return ff
 
 class EncoderStack(snt.AbstractModule):
-    def __init__(self,depth=256, layers=2, name="encoder_stack"):
+    def __init__(self,depth, layers=2, name="encoder_stack"):
         super(EncoderStack, self).__init__(name=name)
         self.layers = layers
         self.depth = depth
@@ -92,7 +92,7 @@ class EncoderStack(snt.AbstractModule):
         return x
 
 class Decoder(snt.AbstractModule):
-    def __init__(self,depth=256,name="decoder"):
+    def __init__(self,depth,name="dcoder"):
         super(Decoder, self).__init__(name=name)
         self.depth = depth
 
@@ -101,11 +101,11 @@ class Decoder(snt.AbstractModule):
                                                             self.depth)
         attention = ScaledDotProductAttention()(masked_attention,self.depth,
                                                     self.depth, encoder_output)
-        ff = FeedForward()(attention)
+        ff = FeedForward(self.depth)(attention)
         return ff
 
 class DecoderStack(snt.AbstractModule):
-    def __init__(self,depth=256,layers=2, name="decoder_stack"):
+    def __init__(self,depth,layers=2, name="decoder_stack"):
         super(DecoderStack, self).__init__(name=name)
         self.layers = layers
         self.depth = depth
