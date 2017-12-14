@@ -38,8 +38,8 @@ class FeedForward(snt.AbstractModule):
         self.dim = dim
 
     def _build(self, inputs):
-        ff1 = tf.layers.dense(inputs, self.dim*4)
-        ff2 = tf.layers.dense(ff1, self.dim)
+        ff1 = tf.layers.dense(inputs, self.dim*4, activation=tf.nn.relu)
+        ff2 = tf.layers.dense(ff1, self.dim, activation=None)
         norm = LayerNorm()(inputs,ff2)
         return norm
 
@@ -48,11 +48,20 @@ class PositionalEncoding(snt.AbstractModule):
     def __init__(self,name="positional_encoding"):
         super(PositionalEncoding, self).__init__(name=name)
 
+    def _build(self, inputs):
+        pass
+
 
 class Embedding(snt.AbstractModule):
-    def __init__(self,name="embedding"):
-        super(Embedding, self).__init__(name=name)        
+    def __init__(self,vocab,dim=256,name="embedding"):
+        super(Embedding, self).__init__(name=name)
+        self.vocab = vocab
+        self.dim = dim
 
+    def _build(self,inputs):
+        embeddings = tf.get_variable("embeddings",[self.vocab, self.dim])
+        lookup = tf.nn.embedding_lookup(embeddings,inputs)
+        return lookup
 
 class Encoder(snt.AbstractModule):
     def __init__(self,depth=256,name="encoder"):
@@ -65,14 +74,15 @@ class Encoder(snt.AbstractModule):
         return output
 
 class EncoderStack(snt.AbstractModule):
-    def __init__(self,layers=2, name="encoder_stack"):
+    def __init__(self,depth=256, layers=2, name="encoder_stack"):
         super(EncoderStack, self).__init__(name=name)
         self.layers = layers
+        self.depth = depth
 
     def _build(self, inputs):
         x = inputs
         for layer in range(self.layers):
-            x = Encoder()(x)
+            x = Encoder(self.depth)(x)
         return x
 
 class Decoder(snt.AbstractModule):
@@ -89,12 +99,13 @@ class Decoder(snt.AbstractModule):
         return ff
 
 class DecoderStack(snt.AbstractModule):
-    def __init__(self,layers=2, name="decoder_stack"):
+    def __init__(self,depth=256,layers=2, name="decoder_stack"):
         super(DecoderStack, self).__init__(name=name)
         self.layers = layers
+        self.depth = depth
 
     def _build(self, outputs_shifted, encoder_outputs):
         x = outputs_shifted
         for layer in range(self.layers):
-            x = Decoder()(outputs_shifted, encoder_outputs)
+            x = Decoder(self.depth)(outputs_shifted, encoder_outputs)    
         return x
