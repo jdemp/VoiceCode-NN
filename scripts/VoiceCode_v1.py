@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import Transformer
 
+
 class VoiceCode(object):
     def __init__(self):
         self.params ={
@@ -46,6 +47,15 @@ class VoiceCode(object):
             return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train)
 
         # get decoder working
+        #where i is the step of the decoder_loop
+        # in [batch size, i]
+        # out [batch size, i, dim]
+        def process_decode_inputs(i,targets):
+            pass
+
+        
+
+
         predictions ={
             "probs": tf.nn.softmax(logits,name="sotfmax_tensor")
         }

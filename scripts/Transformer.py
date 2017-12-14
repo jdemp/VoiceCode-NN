@@ -38,9 +38,14 @@ class FeedForward(snt.AbstractModule):
         self.dim = dim
 
     def _build(self, inputs):
-        ff1 = tf.layers.dense(inputs, self.dim*4, activation=tf.nn.relu)
+        shape = tf.shape(inputs)
+        batch_size = shape[0]
+        length = shape[1]
+        x = tf.reshape(inputs,[batch_size*length,self.dim])
+        ff1 = tf.layers.dense(x, self.dim*4, activation=tf.nn.relu)
         ff2 = tf.layers.dense(ff1, self.dim, activation=None)
-        norm = LayerNorm()(inputs,ff2)
+        y = tf.reshape(ff2, [batch_size,length,self.dim])
+        norm = LayerNorm()(inputs,y)
         return norm
 
 
@@ -48,8 +53,9 @@ class PositionalEncoding(snt.AbstractModule):
     def __init__(self,name="positional_encoding"):
         super(PositionalEncoding, self).__init__(name=name)
 
+
     def _build(self, inputs):
-        pass
+
 
 
 class Embedding(snt.AbstractModule):
@@ -107,5 +113,5 @@ class DecoderStack(snt.AbstractModule):
     def _build(self, outputs_shifted, encoder_outputs):
         x = outputs_shifted
         for layer in range(self.layers):
-            x = Decoder(self.depth)(outputs_shifted, encoder_outputs)    
+            x = Decoder(self.depth)(outputs_shifted, encoder_outputs)
         return x
