@@ -16,6 +16,7 @@ class ScaledDotProductAttention(snt.AbstractModule):
     def __init__(self,masked=False,name="scaled_dot_product_attention"):
         super(ScaledDotProductAttention, self).__init__(name=name)
 
+    # inputs [batch size, length, dim]
     def _build(self, query, key_depth, value_depth, memory=None):
         if memory==None:
             memory=query
@@ -25,6 +26,12 @@ class ScaledDotProductAttention(snt.AbstractModule):
 
         scale = tf.rsqrt(tf.to_float(tf.shape(q)[2]))
         logits = tf.matmul(q*scale, k, transpose_b=True)
+
+        if masked:
+            #prevent future elements from influencing
+            zeros = tf.ones(tf.shape(logits))*-1e9
+            mask = tf.matrix_band_part(zeros,-1,0)
+            logits = tf.add(mask,logits)
 
         weights = tf.nn.softmax(logits, name="attention_weights")
         atten = tf.matmul(weights, v)
@@ -97,7 +104,7 @@ class Decoder(snt.AbstractModule):
         self.depth = depth
 
     def _build(self, inputs, encoder_output):
-        masked_attention = ScaledDotProductAttention()(inputs,self.depth,
+        masked_attention= ScaledDotProductAttention(masked=True)(inputs,self.depth,
                                                             self.depth)
         attention = ScaledDotProductAttention()(masked_attention,self.depth,
                                                     self.depth, encoder_output)

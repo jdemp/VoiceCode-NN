@@ -1,0 +1,27 @@
+as
+assert
+break
+class
+continue
+def
+del
+elif
+else
+except
+exec
+finally
+for
+from
+global
+if
+import
+lambda
+pass
+print
+raise
+return
+try
+while
+with
+yield
+yield from
