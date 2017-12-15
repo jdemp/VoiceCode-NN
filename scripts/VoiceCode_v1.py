@@ -121,7 +121,7 @@ class VoiceCode(object):
             x={"inputs_num": ds["inputs"]},
             y=ds["labels"],
             batch_size=64,
-            num_epochs=1000,
+            num_epochs=16,
             shuffle=True
         )
 
@@ -134,7 +134,10 @@ class VoiceCode(object):
         estimator = tf.estimator.Estimator(
                 model_fn=self.model_fn, model_dir="../models/v1/run1"
         )
-        estimator.train(train_input_fn, hooks=[logging_hook])
+
+        for i in range(1,33):
+            estimator.train(train_input_fn, hooks=[logging_hook])
+            print("Finished "+str(i*16)+" epochs")
 
 
     def test(self):
