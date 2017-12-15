@@ -15,6 +15,7 @@ class LayerNorm(snt.AbstractModule):
 class ScaledDotProductAttention(snt.AbstractModule):
     def __init__(self,masked=False,name="scaled_dot_product_attention"):
         super(ScaledDotProductAttention, self).__init__(name=name)
+        self.masked=masked
 
     # inputs [batch size, length, dim]
     def _build(self, query, key_depth, value_depth, memory=None):
@@ -27,7 +28,7 @@ class ScaledDotProductAttention(snt.AbstractModule):
         scale = tf.rsqrt(tf.to_float(tf.shape(q)[2]))
         logits = tf.matmul(q*scale, k, transpose_b=True)
 
-        if masked:
+        if self.masked:
             #prevent future elements from influencing
             zeros = tf.ones(tf.shape(logits))*-1e9
             mask = tf.matrix_band_part(zeros,-1,0)
@@ -72,7 +73,7 @@ class Embedding(snt.AbstractModule):
         self.dim = dim
 
     def _build(self,inputs):
-        embeddings = tf.get_variable("embeddings",[self.vocab, self.dim])
+        embeddings = tf.get_variable("embeddings",[self.vocab, self.dim],dtype=tf.float32)
         lookup = tf.nn.embedding_lookup(embeddings,inputs)
         return lookup
 

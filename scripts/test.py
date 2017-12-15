@@ -20,9 +20,10 @@ import numpy as np
 # out = sess.run(weights)
 
 
-zeros = tf.ones([3,5,5])*-1e9
-mask = tf.matrix_band_part(zeros,-1,0)
-sess=tf.Session()
+ones = tf.ones([5,1])
+zeros = tf.zeros([5,4])
+final = tf.concat([ones,zeros],1)
+sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
-print(sess.run(mask))
+print(sess.run(final))

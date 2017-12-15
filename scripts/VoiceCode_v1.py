@@ -4,12 +4,13 @@ import Transformer
 from data_from_file import DataFromFile
 
 
+
 class VoiceCode(object):
     def __init__(self):
         self.params ={
             "input_vocab":2500,
             "dim":128,
-            "max_out":32,
+            "max_out":64,
             "out_vocab":2500,
             "input vocab file": "../vocab/inputs_python.voc",
             "output vocab file": "../vocab/code.voc"
@@ -39,6 +40,9 @@ class VoiceCode(object):
 
     def model_fn(self, features, labels, mode):
         inputs = features["inputs_num"]
+        shape = tf.shape(inputs)
+        batch_size = shape[0]
+        length = shape[1]
         #inputs_string = features["inputs_string"]
 
 
@@ -61,17 +65,28 @@ class VoiceCode(object):
                                                 self.params["dim"])
         decoder = Transformer.DecoderStack(self.params["dim"])
         #masked_decoder_input = tf.zeros(shape=tf.shape(labels))
+        ones = tf.ones([batch_size,1],dtype=tf.int32)
+        zeros = tf.zeros([batch_size,1],dtype=tf.int32)
+        shifted_labels = tf.concat([ones*3,labels],1)
+        decoder_input = output_embedding(shifted_labels)
 
-        if mode == tf.estimator.ModeKeys.TRAIN:
-            decoder_input = output_embedding(labels)
-            decoder_output = decoder(decoder_input,encoder_output)
-            logits = tf.layers.dense(decoder_output, self.params["outvocab"])
-            softmax_train = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                        logits=logits,labels=labels)
-            loss = tf.reduce_mean(softmax_train)
-            train = tf.train.AdamOptimizer(0.001).minimize(loss,
+        decoder_output = decoder(decoder_input,encoder_output)
+        logits = tf.layers.dense(decoder_output, self.params["out_vocab"])
+        concat_labels = tf.concat([labels,zeros],1)
+        softmax_train = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                        logits=logits,labels=concat_labels)
+        loss = tf.reduce_mean(softmax_train,name="loss")
+        train = tf.train.AdamOptimizer(0.01).minimize(loss,
                 global_step=tf.train.get_global_step())
+        if mode == tf.estimator.ModeKeys.TRAIN:
             return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train)
+
+        # if mode == tf.estimator.ModeKeys.EVAL:
+        #     eval_metric = {
+        #         "loss":loss
+        #     }
+        #     return tf.estimator.EstimatorSpec(mode=mode,loss=loss,eval_metric_ops=eval_metric)
+
 
         if mode == "test":
             decoder_input = output_embedding(labels)
@@ -97,10 +112,29 @@ class VoiceCode(object):
             return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
     def train(self):
+        tf.logging.set_verbosity(tf.logging.INFO)
         dataset = DataFromFile()
         dataset = DataFromFile(db_dir="../datasets/en-django/")
         files = ["all"]
-        dataset.create_datasets(False, files, self.input_vocab, self.output_vocab)
+        ds = dataset.create_datasets(False, files, self.input_vocab, self.output_vocab)
+        train_input_fn = tf.estimator.inputs.numpy_input_fn(
+            x={"inputs_num": ds["inputs"]},
+            y=ds["labels"],
+            batch_size=64,
+            num_epochs=1000,
+            shuffle=True
+        )
+
+        tensors_to_log = {
+            "Loss":"loss"
+        }
+        logging_hook = tf.train.LoggingTensorHook(
+            tensors=tensors_to_log, every_n_iter=512)
+
+        estimator = tf.estimator.Estimator(
+                model_fn=self.model_fn, model_dir="../models/v1/run1"
+        )
+        estimator.train(train_input_fn, hooks=[logging_hook])
 
 
     def test(self):

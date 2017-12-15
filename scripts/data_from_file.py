@@ -168,7 +168,8 @@ class DataFromFile(object):
                 "batch_perm": np.random.permutation(len(inputs_list)),
                 "test_set": np.random.permutation(len(inputs_list))
             }
-            #print(self.datasets[f]["size"])
+
+            return self.datasets[f]
 
 
 
