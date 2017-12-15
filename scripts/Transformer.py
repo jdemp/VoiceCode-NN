@@ -31,7 +31,7 @@ class ScaledDotProductAttention(snt.AbstractModule):
         if self.masked:
             #prevent future elements from influencing
             zeros = tf.ones(tf.shape(logits))*-1e9
-            mask = tf.matrix_band_part(zeros,-1,0)
+            mask = tf.matrix_band_part(zeros,0,-1)
             logits = tf.add(mask,logits)
 
         weights = tf.nn.softmax(logits, name="attention_weights")
