@@ -73,7 +73,7 @@ class DataFromFile(object):
         X = []
         Y = []
         for x_raw,y_raw in zip(anno_file, code_file):
-            if (len(y_raw.strip()))<126:
+            if (len(y_raw.strip()))<32:
                 X.append(x_raw.strip())
                 Y.append(y_raw.strip())
                 #print(y_raw.strip())
@@ -122,8 +122,7 @@ class DataFromFile(object):
             valid = len(inputs_list)==len(labels_list)==len(labels_len)==len(sequence_lengths)
             assert(valid)
 
-            #print(sequence_lengths.count(0))
-
+            #print(sequence_lengths.count(0)
             #create inputs tensor
             inputs_tensor = np.zeros(shape=(len(inputs_list), max_sequence), dtype=np.int32)
             for i in range(len(inputs_list)):
@@ -135,7 +134,7 @@ class DataFromFile(object):
                     else:
                         a = 1
                     inputs_tensor[i,w] = a
-            #print(inputs_tensor)
+            print(len(inputs_list))
 
             input_length_tensor = np.array(sequence_lengths, dtype=np.int32).flatten()
             #print(input_length_tensor.shape)
@@ -143,7 +142,6 @@ class DataFromFile(object):
             #create labels tensor
             max_label_len = max(labels_len)
 
-            #print (labels_list)
 
             labels_tensor = np.zeros(shape=(len(labels_list), max_label_len), dtype=np.int32)
             for i in range(len(labels_list)):
@@ -164,11 +162,10 @@ class DataFromFile(object):
                 "labels": labels_tensor,
                 "labels_len": labels_length_tensor,
                 "size":len(inputs_list),
-                "batch_index": 0,
-                "batch_perm": np.random.permutation(len(inputs_list)),
                 "test_set": np.random.permutation(len(inputs_list))
             }
-
+            print(self.datasets[f]["inputs"])
+            print(self.datasets[f]["labels"])
             return self.datasets[f]
 
 

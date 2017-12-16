@@ -8,10 +8,10 @@ from data_from_file import DataFromFile
 class VoiceCode(object):
     def __init__(self):
         self.params ={
-            "input_vocab":2500,
+            "input_vocab":5000,
             "dim":128,
             "max_out":64,
-            "out_vocab":2500,
+            "out_vocab":5000,
             "input vocab file": "../vocab/inputs_python.voc",
             "output vocab file": "../vocab/code.voc"
         }
@@ -36,6 +36,9 @@ class VoiceCode(object):
             "<end>":4,
             4:"<end>"
         }
+        self.load_vocab()
+        # print(self.input_vocab)
+        # print(self.output_vocab)
 
 
     def model_fn(self, features, labels, mode):
@@ -78,14 +81,22 @@ class VoiceCode(object):
         loss = tf.reduce_mean(softmax_train,name="loss")
         train = tf.train.AdamOptimizer(0.01).minimize(loss,
                 global_step=tf.train.get_global_step())
+
         if mode == tf.estimator.ModeKeys.TRAIN:
             return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train)
 
-        # if mode == tf.estimator.ModeKeys.EVAL:
-        #     eval_metric = {
-        #         "loss":loss
-        #     }
-        #     return tf.estimator.EstimatorSpec(mode=mode,loss=loss,eval_metric_ops=eval_metric)
+
+        softmax = tf.nn.softmax(logits, name="softmax")
+        argmax = tf.argmax(softmax,axis=-1,output_type=tf.int32)
+
+        sequence_accuracy = tf.to_float(tf.equal(argmax,concat_labels))
+        acc=tf.reduce_mean(sequence_accuracy, -1)
+
+        if mode == tf.estimator.ModeKeys.EVAL:
+            eval_metric = {
+                "accuracy":tf.metrics.mean(acc)
+            }
+            return tf.estimator.EstimatorSpec(mode=mode,loss=loss,eval_metric_ops=eval_metric)
 
 
         if mode == "test":
@@ -113,16 +124,23 @@ class VoiceCode(object):
 
     def train(self):
         tf.logging.set_verbosity(tf.logging.INFO)
-        dataset = DataFromFile()
         dataset = DataFromFile(db_dir="../datasets/en-django/")
         files = ["all"]
         ds = dataset.create_datasets(False, files, self.input_vocab, self.output_vocab)
         train_input_fn = tf.estimator.inputs.numpy_input_fn(
             x={"inputs_num": ds["inputs"]},
             y=ds["labels"],
-            batch_size=64,
+            batch_size=32,
             num_epochs=16,
             shuffle=True
+        )
+
+
+        eval_input_fn=tf.estimator.inputs.numpy_input_fn(
+            x={"inputs_num": ds["inputs"]},
+            y=ds["labels"],
+            num_epochs=1,
+            shuffle=False
         )
 
         tensors_to_log = {
@@ -132,12 +150,15 @@ class VoiceCode(object):
             tensors=tensors_to_log, every_n_iter=512)
 
         estimator = tf.estimator.Estimator(
-                model_fn=self.model_fn, model_dir="../models/v1/run1"
+                model_fn=self.model_fn, model_dir="../models/v1/run"
         )
 
         for i in range(1,33):
             estimator.train(train_input_fn, hooks=[logging_hook])
             print("Finished "+str(i*16)+" epochs")
+            print("Evaluating Model")
+            ev = estimator.evaluate(eval_input_fn)
+            print(ev)
 
 
     def test(self):
@@ -164,16 +185,16 @@ class VoiceCode(object):
             if i_count == self.params["input_vocab"]:
                 break
             word = line.split()[0]
-            if not w.isdigit():
+            if not word.isdigit():
                 self.input_vocab[i_count]=word
                 self.input_vocab[word]=i_count
                 i_count+=1
 
-        for line in i:
-            if i_count == self.params["input_vocab"]:
+        for line in o:
+            if i_count == self.params["out_vocab"]:
                 break
             word = line.split()[0]
-            if not w.isdigit():
+            if not word.isdigit():
                 self.output_vocab[i_count]=word
                 self.output_vocab[word]=o_count
                 o_count+=1
